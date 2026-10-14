@@ -16,10 +16,12 @@
 
 import time
 import tomllib
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import src.app as app_module
-from src.app import Asset, _make_request
+from src.app import Asset, _make_request, test_connectivity
 
 from .conftest import FakeAuthState
 
@@ -174,3 +176,38 @@ class TestAttributionConstants:
         assert app_module.ATTRIBUTION_HEADERS["User-Agent"].startswith(
             "doppel-splunk-soar/"
         )
+
+
+class _FakeSoarClient:
+    def __init__(self) -> None:
+        self.message: str | None = None
+
+    def set_message(self, message: str) -> None:
+        self.message = message
+
+
+class TestConnectivityProbe:
+    def test_probe_is_bounded_by_activity_window(self, api_key_asset, doppel_api):
+        """The probe must stay cheap and tenant-size independent.
+
+        An unfiltered page-0 query is rejected by the API's result-window
+        guard for orgs with very large alert volumes, so the probe pins
+        page_size=1 and a ~24h last_activity_timestamp window.
+        """
+        # The SDK decorator wraps the handler and injects the asset itself;
+        # __wrapped__ is the original (soar, asset) function.
+        test_connectivity.__wrapped__(soar=_FakeSoarClient(), asset=api_key_asset)
+
+        params = doppel_api.calls[0]["params"]
+        assert params["page_size"] == 1
+
+        since = datetime.strptime(
+            params["last_activity_timestamp"], "%Y-%m-%dT%H:%M:%S"
+        ).replace(tzinfo=ZoneInfo("UTC"))
+        now = datetime.now(ZoneInfo("UTC"))
+        assert timedelta(hours=23) < now - since < timedelta(hours=25)
+
+    def test_probe_passes_on_success(self, api_key_asset, doppel_api):
+        soar = _FakeSoarClient()
+        test_connectivity.__wrapped__(soar=soar, asset=api_key_asset)
+        assert soar.message == "Test connectivity passed"

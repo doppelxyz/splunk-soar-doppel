@@ -424,8 +424,17 @@ def _make_request(
 # ========================================
 @app.test_connectivity()
 def test_connectivity(soar: SOARClient, asset: Asset) -> None:
+    # Bound the probe to a narrow activity window so it stays a cheap,
+    # tenant-size-independent check: unfiltered queries can be rejected by
+    # the API's result-window guard for orgs with very large alert volumes.
+    since_ts = (datetime.now(ZoneInfo("UTC")) - timedelta(days=1)).strftime(
+        "%Y-%m-%dT%H:%M:%S"
+    )
     ok, _status_code, _data, error = _make_request(
-        asset, "GET", "/alerts", params={"page_size": 1}
+        asset,
+        "GET",
+        "/alerts",
+        params={"page_size": 1, "last_activity_timestamp": since_ts},
     )
     if ok:
         logger.info("Test connectivity  passed")

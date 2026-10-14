@@ -4,3 +4,4 @@
 * OAuth tokens are cached in encrypted per-asset state and re-minted only on expiry, with a single automatic re-mint retry on HTTP 401
 * Added client attribution headers (`x-doppel-client`, `User-Agent`) to all Doppel API requests
 * Added a unit test suite covering authentication modes, token lifecycle, and output mapping
+* Test connectivity now bounds its probe to a 24-hour activity window so it succeeds regardless of an organization's total alert volume
